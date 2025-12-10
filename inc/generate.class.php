@@ -10,6 +10,57 @@ use Dompdf\Options;
 
 class PluginProtocolsmanagerGenerate extends CommonDBTM {
 
+    public static function getComputersAssignedToUser(?User $user): array {
+    global $DB;
+
+    // Jeśli nadal nie mamy obiektu User → wychodzimy
+    if (!$user instanceof User) {
+        echo "<div class='center'>Ta zakładka działa wyłącznie na profilu użytkownika.</div>";
+        return [];
+    }
+    $user_id = $user->getField('id');
+    $table      = PLUGIN_PROTOCOLS_USER_COMPUTERS_TABLE;
+    $user_field = PLUGIN_PROTOCOLS_USER_FIELD;
+    $item_type  = PLUGIN_PROTOCOLS_USER_ITEMTYPE;
+
+    $records = $DB->request([
+        'SELECT' => ['id', 'items_id', 'itemtype'],
+        'FROM'   => $table,
+        'WHERE'  => [
+            $user_field => $user_id,
+            'itemtype'  => $item_type
+        ]
+    ]);
+        if ($records->count() === 0) {
+            return [];
+        }
+
+        $result = [];
+
+        foreach ($records as $rec) {
+
+            $computer = new Computer();
+
+            if ($computer->getFromDB($rec['items_id'])) {
+                $result[] = [
+                    'id'       => $computer->fields['id'],
+                    'name'     => $computer->fields['name'],
+                    'itemtype' => $rec['itemtype']
+                ];
+            }
+        }
+
+        return $result;
+    }
+
+    static function getComputerLink($itemtype, $id) {
+        global $CFG_GLPI;
+        $table = strtolower($itemtype);
+        return $CFG_GLPI['root_doc'] . "/front/" . $table . ".form.php?id=" . $id;
+    }
+
+
+
     function getTabNameForItem(CommonGLPI $item, $withtemplate=0) {
         return self::createTabEntry('Protocols manager');
     }
@@ -108,7 +159,7 @@ class PluginProtocolsmanagerGenerate extends CommonDBTM {
         $itemid = null;
         $tstid  = null;
 
-        // Verificar si es un objeto User o un item con users_id
+        // Jeśli nie jesteśmy na profilu użytkownika, próbujemy znaleźć users_id
         if (get_class($item) !== "User") {
             if (!empty($item->id) && !empty($item->fields["users_id"])) {
                 $itemid = $item->id;
@@ -118,8 +169,11 @@ class PluginProtocolsmanagerGenerate extends CommonDBTM {
             }
         }
 
+
         $id = $item->getField('id'); // User ID
-        
+        // Pobieramy komputery przypisane w polu fields
+        $computers = self::getComputersAssignedToUser($item);
+
         // Obtener datos extra optimizados
         $userData = self::getUserExtraData($id);
         
@@ -163,6 +217,62 @@ class PluginProtocolsmanagerGenerate extends CommonDBTM {
         $header .= "<th class='center'>".__('Inventory number')."</th>";
         $header .= "<th class='center'>".__('Comments')."</th></tr>";
         echo $header;
+
+        // --- WSTRZYKNIĘCIE KOMPUTERÓW Z FIELDS ---
+        if (!empty($computers)) {
+
+            foreach ($computers as $c) {
+
+                echo "<tr class='tab_bg_1'>";
+
+                // checkbox
+                echo "<td width='10'><input type='checkbox' name='number[]' value='" . htmlescape($counter) . "' class='child' style='height:16px; width:16px;'></td>";
+
+                // TYPE
+                echo "<td class='center'>Computer</td>";
+
+                // Manufacturer
+                echo "<td class='center'>" . htmlescape($c['manufacturer'] ?? '') . "</td>";
+
+                // Model
+                echo "<td class='center'>" . htmlescape($c['model'] ?? '') . "</td>";
+
+                // Name (z linkiem)
+                $linkURL = PluginProtocolsmanagerGenerate::getComputerLink($c['itemtype'], $c['id']);
+                echo "<td class='center'><a href='" . htmlescape($linkURL) . "'>" . htmlescape($c['name']) . "</a></td>";
+
+                // State
+                echo "<td class='center'>" . htmlescape($c['state'] ?? '') . "</td>";
+
+                // Serial Number
+                echo "<td class='center'>" . htmlescape($c['serial'] ?? '') . "</td>";
+
+                // Inventory Number
+                echo "<td class='center'>" . htmlescape($c['otherserial'] ?? '') . "</td>";
+
+                // Comment
+                echo "<td class='center'><input type='text' name='comments[]'></td>";
+
+                // HIDDEN FIELDS (konieczne do generowania dokumentów)
+                echo "<input type='hidden' name='classes[]' value='" . htmlescape($c['itemtype']) . "'>";
+                echo "<input type='hidden' name='ids[]' value='" . htmlescape($c['id']) . "'>";
+                echo "<input type='hidden' name='owner' value='" . htmlescape($owner) . "'>";
+                echo "<input type='hidden' name='author' value='" . htmlescape($author) . "'>";
+                echo "<input type='hidden' name='type_name[]' value='Computer'>";
+                echo "<input type='hidden' name='man_name[]' value='" . htmlescape($c['manufacturer'] ?? '') . "'>";
+                echo "<input type='hidden' name='mod_name[]' value='" . htmlescape($c['model'] ?? '') . "'>";
+                echo "<input type='hidden' name='serial[]' value='" . htmlescape($c['serial'] ?? '') . "'>";
+                echo "<input type='hidden' name='otherserial[]' value='" . htmlescape($c['otherserial'] ?? '') . "'>";
+                echo "<input type='hidden' name='item_name[]' value='" . htmlescape($c['name'] ?? '') . "'>";
+                echo "<input type='hidden' name='user_id' value='" . htmlescape($id) . "'>";
+
+                echo "</tr>";
+
+                $counter++;
+            }
+        }
+        // --- KONIEC WSTRZYKNIĘCIA KOMPUTERÓW ---
+
         
         // Iterar sobre tipos de items vinculados al usuario
         foreach ($type_user as $itemtype) {

@@ -62,6 +62,17 @@ function plugin_init_protocolsmanager(): void
     Plugin::registerClass('PluginProtocolsmanagerProfile', ['addtabon' => ['Profile']]);
     Plugin::registerClass('PluginProtocolsmanagerConfig',  ['addtabon' => ['Config']]);
 
+    // --- Konfiguracja nazw tabel i pól pluginu ---
+    if (!defined('PLUGIN_PROTOCOLS_USER_COMPUTERS_TABLE')) {
+        define('PLUGIN_PROTOCOLS_USER_COMPUTERS_TABLE', 'glpi_plugin_fields_computerodpowiedzialnymaterialnies');
+    }
+    if (!defined('PLUGIN_PROTOCOLS_USER_FIELD')) {
+        define('PLUGIN_PROTOCOLS_USER_FIELD', 'users_id_odpowiedzialnymaterialniefield');
+    }
+    if (!defined('PLUGIN_PROTOCOLS_USER_ITEMTYPE')) {
+        define('PLUGIN_PROTOCOLS_USER_ITEMTYPE', 'Computer');
+    }
+
     // --- SÉCURITÉ : ne pas appeler la table avant qu’elle n’existe ---
     if ($DB->tableExists('glpi_plugin_protocolsmanager_profiles')) {
         if (class_exists('PluginProtocolsmanagerProfile')
