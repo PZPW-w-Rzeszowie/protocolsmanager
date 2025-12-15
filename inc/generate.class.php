@@ -10,6 +10,170 @@ use Dompdf\Options;
 
 class PluginProtocolsmanagerGenerate extends CommonDBTM {
 
+    private static function debug(string $msg): void {
+        file_put_contents('php://stdout', '[PROTOCOLS DEBUG] ' . $msg . PHP_EOL);
+    }
+
+
+    public static function getResponsibleFieldsTables(): array {
+        global $DB;
+
+        $tables = [];
+
+        // Pobierz wszystkie aktywne kontenery
+        $containers = $DB->request([
+            'FROM' => 'glpi_plugin_fields_containers',
+            'WHERE' => ['is_active' => 1]
+        ]);
+
+        foreach ($containers as $container) {
+            // Pobierz pola w kontenerze
+            $fields = $DB->request([
+                'FROM' => 'glpi_plugin_fields_fields',
+                'WHERE' => ['plugin_fields_containers_id' => $container['id']]
+            ]);
+
+            foreach ($fields as $field) {
+                // Sprawdź, czy nazwa pola zawiera 'odpowiedzialnymaterialnie'
+                if (str_contains(strtolower($field['name']), 'odpowiedzialnymaterialnie')) {
+                    $itemtypes = json_decode($container['itemtypes'], true) ?: [];
+                    foreach ($itemtypes as $itemtype) {
+                        $tableName = 'glpi_plugin_fields_' . strtolower($itemtype) . $field['name'];
+                        $tables[] = $tableName;
+                        file_put_contents('php://stdout', "DEBUG: found table = $tableName\n");
+                    }
+                }
+            }
+        }
+
+        return $tables;
+    }
+
+    public static function getItemsAssignedToUser(?User $user): array {
+        global $DB;
+
+        self::debug('getItemsAssignedToUser() START');
+
+        
+        if (!$user instanceof User) {
+            self::debug('User is not instance of User');
+            return [];
+        }
+        
+        $user_id = (int)$user->getField('id');
+        self::debug('User ID = ' . $user_id);
+        
+        $tables = self::getDodatkowePolaTables();
+        self::debug('Tables to scan = ' . count($tables));
+
+        $result = [];
+
+        foreach ($tables as $table) {
+
+            self::debug('Scanning table: ' . $table);
+
+            $records = $DB->request([
+                'SELECT' => ['items_id', 'itemtype'],
+                'FROM'   => $table,
+                'WHERE'  => [
+                    'users_id_odpowiedzialnymaterialniefield' => $user_id
+                ]
+            ]);
+
+            self::debug(
+                'Records found in ' . $table . ' = ' . $records->count()
+            );
+
+            foreach ($records as $rec) {
+
+                self::debug(
+                    'ROW: itemtype=' . ($rec['itemtype'] ?? 'NULL') .
+                    ' items_id=' . ($rec['items_id'] ?? 'NULL')
+                );
+
+                $itemtype = $rec['itemtype'];
+                $items_id = (int)$rec['items_id'];
+
+                if (!$itemtype || !class_exists($itemtype)) {
+                    self::debug('Class does not exist: ' . $itemtype);
+                    continue;
+                }
+
+                $item = new $itemtype();
+
+                if (!$item->getFromDB($items_id)) {
+                    self::debug('Failed getFromDB: ' . $itemtype . ' #' . $items_id);
+                    continue;
+                }
+
+                self::debug(
+                    'LOADED: ' . $itemtype . ' #' . $items_id .
+                    ' name=' . ($item->fields['name'] ?? '')
+                );
+
+                $result[] = [
+                    'id'           => $item->fields['id'],
+                    'name'         => $item->fields['name'] ?? '',
+                    'itemtype'     => $itemtype,
+                    'manufacturer' => $item->fields['manufacturer'] ?? '',
+                    'model'        => $item->fields['model'] ?? '',
+                    'serial'       => $item->fields['serial'] ?? '',
+                    'otherserial'  => $item->fields['otherserial'] ?? '',
+                ];
+            }
+        }
+
+        self::debug('TOTAL ITEMS RETURNED = ' . count($result));
+
+        return $result;
+    }
+
+
+
+   public static function getDodatkowePolaTables(): array {
+    global $DB;
+
+    self::debug('getDodatkowePolaTables() START');
+
+    $tables = [];
+
+    // pobierz kontener "dodatkowepola"
+    $container = $DB->request([
+        'FROM'  => 'glpi_plugin_fields_containers',
+        'WHERE' => [
+            'name'      => 'dodatkowepola',
+            'is_active' => 1
+        ]
+    ])->current();
+
+    if (!$container) {
+        self::debug('Container dodatkowepola NOT FOUND');
+        return [];
+    }
+
+    self::debug('Container found', $container);
+
+    $itemtypes = json_decode($container['itemtypes'], true) ?? [];
+    self::debug('Itemtypes', $itemtypes);
+
+    foreach ($itemtypes as $itemtype) {
+        $table = 'glpi_plugin_fields_' . strtolower($itemtype) . 'dodatkowepolas';
+
+        if ($DB->tableExists($table)) {
+            $tables[] = $table;
+            self::debug('TABLE EXISTS', $table);
+        } else {
+            self::debug('TABLE MISSING', $table);
+        }
+    }
+
+    self::debug('TOTAL TABLES FOUND', count($tables));
+
+    return $tables;
+}
+
+
+
     public static function getComputersAssignedToUser(?User $user): array {
     global $DB;
 
@@ -171,8 +335,6 @@ class PluginProtocolsmanagerGenerate extends CommonDBTM {
 
 
         $id = $item->getField('id'); // User ID
-        // Pobieramy komputery przypisane w polu fields
-        $computers = self::getComputersAssignedToUser($item);
 
         // Obtener datos extra optimizados
         $userData = self::getUserExtraData($id);
@@ -207,7 +369,7 @@ class PluginProtocolsmanagerGenerate extends CommonDBTM {
 
         // Tabla principal de items
         echo "<div class='spaced'><table class='tab_cadre_fixehov' id='additional_table'>";
-        $header = "<th width='10'><input type='checkbox' class='checkall' style='height:16px; width: 16px;'></th>";
+        $header = "<th width='10'><input checked type='checkbox' class='checkall' style='height:16px; width: 16px;'></th>";
         $header .= "<th class='center'>".__('Type')."</th>";
         $header .= "<th class='center'>".__('Manufacturer')."</th>";
         $header .= "<th class='center'>".__('Model')."</th>";
@@ -218,60 +380,60 @@ class PluginProtocolsmanagerGenerate extends CommonDBTM {
         $header .= "<th class='center'>".__('Comments')."</th></tr>";
         echo $header;
 
-        // --- WSTRZYKNIĘCIE KOMPUTERÓW Z FIELDS ---
-        if (!empty($computers)) {
+        // --- WSTRZYKIWANIE ELEMENTÓW Z ODPOWIEDZIALNY MATERIALNIE ---
+        $items = self::getItemsAssignedToUser($item);
 
-            foreach ($computers as $c) {
+        file_put_contents(
+            'php://stdout',
+            '[PROTOCOLS DEBUG] showContent(): items count = ' . count($items) . PHP_EOL
+        );
+        
+        foreach ($items as $c) {
 
-                echo "<tr class='tab_bg_1'>";
+            echo "<tr class='tab_bg_1'>";
 
-                // checkbox
-                echo "<td width='10'><input type='checkbox' name='number[]' value='" . htmlescape($counter) . "' class='child' style='height:16px; width:16px;'></td>";
+            echo "<td width='10'>
+                <input type='checkbox'
+                    name='number[]'
+                    value='" . htmlescape($counter) . "'
+                    class='child'
+                    style='height:16px; width:16px;'>
+            </td>";
 
-                // TYPE
-                echo "<td class='center'>Computer</td>";
+            echo "<td class='center'>" . htmlescape($c['itemtype']) . "</td>";
+            echo "<td class='center'>" . htmlescape($c['manufacturer'] ?? '') . "</td>";
+            echo "<td class='center'>" . htmlescape($c['model'] ?? '') . "</td>";
 
-                // Manufacturer
-                echo "<td class='center'>" . htmlescape($c['manufacturer'] ?? '') . "</td>";
+            $linkURL = self::getComputerLink($c['itemtype'], $c['id']);
+            echo "<td class='center'>
+                    <a href='" . htmlescape($linkURL) . "'>" . htmlescape($c['name']) . "</a>
+                </td>";
 
-                // Model
-                echo "<td class='center'>" . htmlescape($c['model'] ?? '') . "</td>";
+            echo "<td class='center'>" . htmlescape($c['state'] ?? '') . "</td>";
+            echo "<td class='center'>" . htmlescape($c['serial'] ?? '') . "</td>";
+            echo "<td class='center'>" . htmlescape($c['otherserial'] ?? '') . "</td>";
 
-                // Name (z linkiem)
-                $linkURL = PluginProtocolsmanagerGenerate::getComputerLink($c['itemtype'], $c['id']);
-                echo "<td class='center'><a href='" . htmlescape($linkURL) . "'>" . htmlescape($c['name']) . "</a></td>";
+            echo "<td class='center'><input type='text' name='comments[]'></td>";
 
-                // State
-                echo "<td class='center'>" . htmlescape($c['state'] ?? '') . "</td>";
+            /* ====== KLUCZOWE HIDDEN INPUTY ====== */
 
-                // Serial Number
-                echo "<td class='center'>" . htmlescape($c['serial'] ?? '') . "</td>";
+            echo "<input type='hidden' name='classes[]' value='" . htmlescape($c['itemtype']) . "'>";
+            echo "<input type='hidden' name='ids[]' value='" . htmlescape($c['id']) . "'>";
+            echo "<input type='hidden' name='type_name[]' value='" . htmlescape($c['itemtype']) . "'>";
+            echo "<input type='hidden' name='man_name[]' value='" . htmlescape($c['manufacturer'] ?? '') . "'>";
+            echo "<input type='hidden' name='mod_name[]' value='" . htmlescape($c['model'] ?? '') . "'>";
+            echo "<input type='hidden' name='serial[]' value='" . htmlescape($c['serial'] ?? '') . "'>";
+            echo "<input type='hidden' name='otherserial[]' value='" . htmlescape($c['otherserial'] ?? '') . "'>";
+            echo "<input type='hidden' name='item_name[]' value='" . htmlescape($c['name']) . "'>";
+            echo "<input type='hidden' name='user_id' value='" . htmlescape($id) . "'>";
 
-                // Inventory Number
-                echo "<td class='center'>" . htmlescape($c['otherserial'] ?? '') . "</td>";
+            echo "</tr>";
 
-                // Comment
-                echo "<td class='center'><input type='text' name='comments[]'></td>";
-
-                // HIDDEN FIELDS (konieczne do generowania dokumentów)
-                echo "<input type='hidden' name='classes[]' value='" . htmlescape($c['itemtype']) . "'>";
-                echo "<input type='hidden' name='ids[]' value='" . htmlescape($c['id']) . "'>";
-                echo "<input type='hidden' name='owner' value='" . htmlescape($owner) . "'>";
-                echo "<input type='hidden' name='author' value='" . htmlescape($author) . "'>";
-                echo "<input type='hidden' name='type_name[]' value='Computer'>";
-                echo "<input type='hidden' name='man_name[]' value='" . htmlescape($c['manufacturer'] ?? '') . "'>";
-                echo "<input type='hidden' name='mod_name[]' value='" . htmlescape($c['model'] ?? '') . "'>";
-                echo "<input type='hidden' name='serial[]' value='" . htmlescape($c['serial'] ?? '') . "'>";
-                echo "<input type='hidden' name='otherserial[]' value='" . htmlescape($c['otherserial'] ?? '') . "'>";
-                echo "<input type='hidden' name='item_name[]' value='" . htmlescape($c['name'] ?? '') . "'>";
-                echo "<input type='hidden' name='user_id' value='" . htmlescape($id) . "'>";
-
-                echo "</tr>";
-
-                $counter++;
-            }
+            $counter++;
         }
-        // --- KONIEC WSTRZYKNIĘCIA KOMPUTERÓW ---
+
+
+        // --- KONIEC WSTRZYKNIĘCIA  ---
 
         
         // Iterar sobre tipos de items vinculados al usuario
