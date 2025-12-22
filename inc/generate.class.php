@@ -437,120 +437,120 @@ class PluginProtocolsmanagerGenerate extends CommonDBTM {
 
         
         // Iterar sobre tipos de items vinculados al usuario
-        foreach ($type_user as $itemtype) {
-            if (!($itemObj = getItemForItemtype($itemtype))) {
-                continue;
-            }
+        // foreach ($type_user as $itemtype) {
+        //     if (!($itemObj = getItemForItemtype($itemtype))) {
+        //         continue;
+        //     }
             
-            if ($itemObj->canView()) {
-                $itemtable = getTableForItemType($itemtype);
+        //     if ($itemObj->canView()) {
+        //         $itemtable = getTableForItemType($itemtype);
                 
-                $criteria = [
-                    'FROM'  => $itemtable,
-                    'WHERE' => [$field_user => $id]
-                ];
+        //         $criteria = [
+        //             'FROM'  => $itemtable,
+        //             'WHERE' => [$field_user => $id]
+        //         ];
 
-                if ($itemObj->maybeTemplate()) {
-                    $criteria['WHERE']['is_template'] = 0;
-                }
+        //         if ($itemObj->maybeTemplate()) {
+        //             $criteria['WHERE']['is_template'] = 0;
+        //         }
                 
-                if ($itemObj->maybeDeleted()) {
-                    $criteria['WHERE']['is_deleted'] = 0;
-                }
+        //         if ($itemObj->maybeDeleted()) {
+        //             $criteria['WHERE']['is_deleted'] = 0;
+        //         }
 
-                $item_iterator = $DB->request($criteria);
-                $type_name = $itemObj->getTypeName();
+        //         $item_iterator = $DB->request($criteria);
+        //         $type_name = $itemObj->getTypeName();
 
-                foreach ($item_iterator as $data) {
-                    $cansee = $itemObj->can($data["id"], READ);
-                    $linkName = empty($data["name"]) ? $data["id"] : $data["name"];
+        //         foreach ($item_iterator as $data) {
+        //             $cansee = $itemObj->can($data["id"], READ);
+        //             $linkName = empty($data["name"]) ? $data["id"] : $data["name"];
                     
-                    if ($cansee) {
-                        $link_item = $itemObj::getFormURLWithID($data['id']);
-                        if ($_SESSION["glpiis_ids_visible"] || empty($data["name"])) {
-                            $linkName = sprintf(__('%1$s (%2$s)'), $linkName, $data["id"]);
-                        }
-                        $link = "<a href='" . htmlescape($link_item) . "'>" . htmlescape($linkName) . "</a>";
-                    } else {
-                        $link = htmlescape($linkName);
-                    }
+        //             if ($cansee) {
+        //                 $link_item = $itemObj::getFormURLWithID($data['id']);
+        //                 if ($_SESSION["glpiis_ids_visible"] || empty($data["name"])) {
+        //                     $linkName = sprintf(__('%1$s (%2$s)'), $linkName, $data["id"]);
+        //                 }
+        //                 $link = "<a href='" . htmlescape($link_item) . "'>" . htmlescape($linkName) . "</a>";
+        //             } else {
+        //                 $link = htmlescape($linkName);
+        //             }
         
-                    echo "<tr class='tab_bg_1'>";
-                    // Checkbox
-                    echo "<td width='10'><input type='checkbox' name='number[]' value='" . htmlescape($counter) . "' class='child' style='height:16px; width: 16px;'></td>";
+        //             echo "<tr class='tab_bg_1'>";
+        //             // Checkbox
+        //             echo "<td width='10'><input type='checkbox' name='number[]' value='" . htmlescape($counter) . "' class='child' style='height:16px; width: 16px;'></td>";
                     
-                    // Type
-                    echo "<td class='center'>" . htmlescape($type_name) . "</td>";
+        //             // Type
+        //             echo "<td class='center'>" . htmlescape($type_name) . "</td>";
                     
-                    // Manufacturer (Optimized)
-                    $man_name = '';
-                    if (!empty($data["manufacturers_id"])) {
-                        $man_name = Dropdown::getDropdownName('glpi_manufacturers', $data['manufacturers_id']);
-                        $man_name = explode(' ', trim($man_name))[0];
-                    }
-                    echo "<td class='center'>" . ($man_name ? htmlescape($man_name) : '&nbsp;') . "</td>";
+        //             // Manufacturer (Optimized)
+        //             $man_name = '';
+        //             if (!empty($data["manufacturers_id"])) {
+        //                 $man_name = Dropdown::getDropdownName('glpi_manufacturers', $data['manufacturers_id']);
+        //                 $man_name = explode(' ', trim($man_name))[0];
+        //             }
+        //             echo "<td class='center'>" . ($man_name ? htmlescape($man_name) : '&nbsp;') . "</td>";
 
-                    // Model (Optimized)
-                    $mod_name = '';
-                    $modeltypes = ["computer", "phone", "monitor", "networkequipment", "printer", "peripheral"];
-                    foreach ($modeltypes as $prefix) {
-                        if (!empty($data[$prefix.'models_id'])) {
-                            $mod_name = Dropdown::getDropdownName('glpi_'.$prefix.'models', $data[$prefix.'models_id']);
-                            break; 
-                        }
-                    }
-                    echo "<td class='center'>" . ($mod_name ? htmlescape($mod_name) : '&nbsp;') . "</td>";
+        //             // Model (Optimized)
+        //             $mod_name = '';
+        //             $modeltypes = ["computer", "phone", "monitor", "networkequipment", "printer", "peripheral"];
+        //             foreach ($modeltypes as $prefix) {
+        //                 if (!empty($data[$prefix.'models_id'])) {
+        //                     $mod_name = Dropdown::getDropdownName('glpi_'.$prefix.'models', $data[$prefix.'models_id']);
+        //                     break; 
+        //                 }
+        //             }
+        //             echo "<td class='center'>" . ($mod_name ? htmlescape($mod_name) : '&nbsp;') . "</td>";
                     
-                    // Link/Name
-                    echo "<td class='center'>$link</td>"; 
+        //             // Link/Name
+        //             echo "<td class='center'>$link</td>"; 
                     
-                    // State (Optimized)
-                    $sta_name = '';
-                    if (!empty($data["states_id"])) {
-                        $sta_name = Dropdown::getDropdownName('glpi_states', $data['states_id']);
-                        $sta_name = explode(' ', trim($sta_name))[0];
-                    }
-                    echo "<td class='center'>" . ($sta_name ? htmlescape($sta_name) : '&nbsp;') . "</td>";
+        //             // State (Optimized)
+        //             $sta_name = '';
+        //             if (!empty($data["states_id"])) {
+        //                 $sta_name = Dropdown::getDropdownName('glpi_states', $data['states_id']);
+        //                 $sta_name = explode(' ', trim($sta_name))[0];
+        //             }
+        //             echo "<td class='center'>" . ($sta_name ? htmlescape($sta_name) : '&nbsp;') . "</td>";
                     
-                    // Serial
-                    $serial = !empty($data["serial"]) ? $data["serial"] : '';
-                    echo "<td class='center'>" . ($serial ? htmlescape($serial) : '&nbsp;') . "</td>";
+        //             // Serial
+        //             $serial = !empty($data["serial"]) ? $data["serial"] : '';
+        //             echo "<td class='center'>" . ($serial ? htmlescape($serial) : '&nbsp;') . "</td>";
                     
-                    // Inventory Number (otherserial)
-                    $otherserial = !empty($data["otherserial"]) ? $data["otherserial"] : '';
-                    echo "<td class='center'>" . ($otherserial ? htmlescape($otherserial) : '&nbsp;') . "</td>";
+        //             // Inventory Number (otherserial)
+        //             $otherserial = !empty($data["otherserial"]) ? $data["otherserial"] : '';
+        //             echo "<td class='center'>" . ($otherserial ? htmlescape($otherserial) : '&nbsp;') . "</td>";
                     
-                    // Hidden fields for Form Processing
-                    $item_name = !empty($data["name"]) ? $data["name"] : '';
-                    $ids = !empty($data["id"]) ? $data["id"] : '';
+        //             // Hidden fields for Form Processing
+        //             $item_name = !empty($data["name"]) ? $data["name"] : '';
+        //             $ids = !empty($data["id"]) ? $data["id"] : '';
                     
-                    $Owner = new User();
-                    $Owner->getFromDB($id);
-                    $owner = $Owner->getFriendlyName();
+        //             $Owner = new User();
+        //             $Owner->getFromDB($id);
+        //             $owner = $Owner->getFriendlyName();
 
-                    $Author = new User();
-                    $Author->getFromDB(Session::getLoginUserID());
-                    $author = $Author->getFriendlyName();
+        //             $Author = new User();
+        //             $Author->getFromDB(Session::getLoginUserID());
+        //             $author = $Author->getFriendlyName();
 
-                    echo "<input type='hidden' name='classes[]' value='" . htmlescape($itemtype) . "'>";
-                    echo "<input type='hidden' name='ids[]' value='" . htmlescape($ids) . "'>";    
-                    echo "<input type='hidden' name='owner' value ='" . htmlescape($owner) . "'>";
-                    echo "<input type='hidden' name='author' value ='" . htmlescape($author) . "'>";
-                    echo "<input type='hidden' name='type_name[]' value='" . htmlescape($type_name) . "'>";
-                    echo "<input type='hidden' name='man_name[]' value='" . htmlescape($man_name) . "'>";
-                    echo "<input type='hidden' name='mod_name[]' value='" . htmlescape($mod_name) . "'>";
-                    echo "<input type='hidden' name='serial[]' value='" . htmlescape($serial) . "'>";
-                    echo "<input type='hidden' name='otherserial[]' value='" . htmlescape($otherserial) . "'>";
-                    echo "<input type='hidden' name='item_name[]' value='" . htmlescape($item_name) . "'>";
-                    echo "<input type='hidden' name='user_id' value='" . htmlescape($id) . "'>";
+        //             echo "<input type='hidden' name='classes[]' value='" . htmlescape($itemtype) . "'>";
+        //             echo "<input type='hidden' name='ids[]' value='" . htmlescape($ids) . "'>";    
+        //             echo "<input type='hidden' name='owner' value ='" . htmlescape($owner) . "'>";
+        //             echo "<input type='hidden' name='author' value ='" . htmlescape($author) . "'>";
+        //             echo "<input type='hidden' name='type_name[]' value='" . htmlescape($type_name) . "'>";
+        //             echo "<input type='hidden' name='man_name[]' value='" . htmlescape($man_name) . "'>";
+        //             echo "<input type='hidden' name='mod_name[]' value='" . htmlescape($mod_name) . "'>";
+        //             echo "<input type='hidden' name='serial[]' value='" . htmlescape($serial) . "'>";
+        //             echo "<input type='hidden' name='otherserial[]' value='" . htmlescape($otherserial) . "'>";
+        //             echo "<input type='hidden' name='item_name[]' value='" . htmlescape($item_name) . "'>";
+        //             echo "<input type='hidden' name='user_id' value='" . htmlescape($id) . "'>";
                     
-                    echo "<td class='center'><input type='text' name='comments[]'></td>";
-                    echo "</tr>";
+        //             echo "<td class='center'><input type='text' name='comments[]'></td>";
+        //             echo "</tr>";
                     
-                    $counter++;
-                }
-            }
-        }
+        //             $counter++;
+        //         }
+        //     }
+        // }
 
         // --- BLOQUE ASSETS ---
         $criteria_assets = [
