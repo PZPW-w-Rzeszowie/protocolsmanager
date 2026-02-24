@@ -1,0 +1,109 @@
+name: glpi
+
+services:
+  glpi:
+    build:
+      context: .
+      dockerfile: Dockerfile.glpi
+    container_name: glpi
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    environment:
+      GLPI_DB_HOST: db
+      GLPI_DB_PORT: 3306
+      GLPI_DB_NAME: ${GLPI_DB_NAME}
+      GLPI_DB_USER: ${GLPI_DB_USER}
+      GLPI_DB_PASSWORD: ${GLPI_DB_PASSWORD}
+      # kompatybilność wsteczna (jeśli obraz używa krótszych nazw)
+      DB_HOST: db
+      DB_NAME: ${GLPI_DB_NAME}
+      DB_USER: ${GLPI_DB_USER}
+      DB_PASSWORD: ${GLPI_DB_PASSWORD}
+      TIMEZONE: Europe/Warsaw
+    volumes:
+      - ../:/var/glpi/marketplace/protocolsmanager
+      - ../glpi-config/local_define.php:/etc/glpi/local_define.php
+      # ukrycie .git przed kontenerem, żeby chown nie zwracał błędów
+      - git_hide:/var/glpi/marketplace/protocolsmanager/.git
+      # wygenerowane klasy pluginu Fields
+      - fields_classes:/var/glpi/files/_plugins/fields
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: "mysql"
+    restart: "unless-stopped"
+    volumes:
+      - db_data:/var/lib/mysql
+    environment:
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_DATABASE: ${GLPI_DB_NAME}
+      MYSQL_USER: ${GLPI_DB_USER}
+      MYSQL_PASSWORD: ${GLPI_DB_PASSWORD}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -u${GLPI_DB_USER} -p${GLPI_DB_PASSWORD} --silent",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # Serwis inicjalizujący – instaluje plugin Fields, konfiguruje kontener
+  # "dodatkowepola" i generuje dynamiczne klasy PHP.
+  # Czeka aż GLPI się zainstaluje, potem wykonuje setup.
+  fields-setup:
+    build:
+      context: .
+      dockerfile: Dockerfile.glpi
+    depends_on:
+      db:
+        condition: service_healthy
+      glpi:
+        condition: service_started
+    environment:
+      GLPI_DB_HOST: db
+      GLPI_DB_PORT: 3306
+      GLPI_DB_NAME: ${GLPI_DB_NAME}
+      GLPI_DB_USER: ${GLPI_DB_USER}
+      GLPI_DB_PASSWORD: ${GLPI_DB_PASSWORD}
+      DB_HOST: db
+      DB_NAME: ${GLPI_DB_NAME}
+      DB_USER: ${GLPI_DB_USER}
+      DB_PASSWORD: ${GLPI_DB_PASSWORD}
+    volumes:
+      - ../glpi-config/local_define.php:/etc/glpi/local_define.php
+      - ./init-fields.sql:/init-fields.sql:ro
+      - fields_classes:/var/glpi/files/_plugins/fields
+    entrypoint:
+      - "sh"
+      - "-c"
+      - |
+        set -e
+        echo '[fields-setup] Czekam na inicjalizację GLPI...'
+        for i in $$(seq 1 60); do
+          if mysql --skip-ssl -h db -u"$$GLPI_DB_USER" -p"$$GLPI_DB_PASSWORD" "$$GLPI_DB_NAME" -e "SELECT 1 FROM glpi_configs LIMIT 1" >/dev/null 2>&1; then
+            break
+          fi
+          echo "[fields-setup]   ...czekam ($$i/60)"
+          sleep 5
+        done
+        echo '[fields-setup] 1/4 Instalacja pluginu Fields...'
+        php /var/www/glpi/bin/console glpi:plugin:install --allow-superuser fields 2>/dev/null || \
+        php /var/www/glpi/bin/console glpi:plugin:install --allow-superuser --force fields
+        echo '[fields-setup] 2/4 Aktywacja pluginu Fields...'
+        php /var/www/glpi/bin/console glpi:plugin:activate --allow-superuser fields
+        echo '[fields-setup] 3/4 Konfiguracja SQL (kontener + pola + uprawnienia)...'
+        mysql --skip-ssl -h db -u"$$GLPI_DB_USER" -p"$$GLPI_DB_PASSWORD" "$$GLPI_DB_NAME" < /init-fields.sql
+        echo '[fields-setup] 4/4 Regeneracja klas dynamicznych...'
+        php /var/www/glpi/bin/console plugins:fields:regenerate_files --allow-superuser
+        echo '[fields-setup] Gotowe.'
+    restart: "no"
+
+volumes:
+  db_data:
+  git_hide:
+  fields_classes:

@@ -20,6 +20,12 @@ class PluginProtocolsmanagerGenerate extends CommonDBTM {
 
         $tables = [];
 
+        // Sprawdź czy plugin Fields jest zainstalowany
+        if (!$DB->tableExists('glpi_plugin_fields_containers')) {
+            self::debug('Table glpi_plugin_fields_containers does not exist (Fields plugin not installed?)');
+            return [];
+        }
+
         // Pobierz wszystkie aktywne kontenery
         $containers = $DB->request([
             'FROM' => 'glpi_plugin_fields_containers',
@@ -136,6 +142,12 @@ class PluginProtocolsmanagerGenerate extends CommonDBTM {
     self::debug('getDodatkowePolaTables() START');
 
     $tables = [];
+
+    // Sprawdź czy plugin Fields jest zainstalowany
+    if (!$DB->tableExists('glpi_plugin_fields_containers')) {
+        self::debug('Table glpi_plugin_fields_containers does not exist (Fields plugin not installed?)');
+        return [];
+    }
 
     // pobierz kontener "dodatkowepola"
     $container = $DB->request([
@@ -330,6 +342,10 @@ class PluginProtocolsmanagerGenerate extends CommonDBTM {
                 $tstid  = $item->fields["users_id"];
                 $item = new User();
                 $item->getFromDB($tstid);
+            } else {
+                // Brak powiązanego użytkownika – nie możemy wyświetlić zakładki
+                echo "<div class='center'><br><b>" . __('No user linked to this item.') . "</b></div>";
+                return;
             }
         }
 
@@ -347,7 +363,8 @@ class PluginProtocolsmanagerGenerate extends CommonDBTM {
 
         echo "<br>";
         echo "<form method='post' name='user_field". htmlescape($rand) ."' id='user_field". htmlescape($rand) ."' action=\"" . htmlescape($CFG_GLPI["root_doc"]) . "/plugins/protocolsmanager/front/generate.form.php\">";
-        
+        echo Html::hidden('_glpi_csrf_token', ['value' => Session::getNewCSRFToken()]);
+
         // Tabla de selección de plantilla
         echo "<table class='tab_cadre_fixe'><tr><td style ='width:25%'></td>";
         echo "<td class='center' style ='width:25%'>";
@@ -983,14 +1000,18 @@ class PluginProtocolsmanagerGenerate extends CommonDBTM {
         global $DB;
         
         $req = $DB->request([
-            'SELECT' => [new \QueryExpression('MAX(id) AS max')],
-            'FROM' => 'glpi_plugin_protocolsmanager_protocols'
+            'SELECT' => ['id'],
+            'FROM'   => 'glpi_plugin_protocolsmanager_protocols',
+            'ORDER'  => 'id DESC',
+            'LIMIT'  => 1
         ]);
 
         if ($row = $req->current()) {
-            $nextnum = $row["max"];
-            return $nextnum ? $nextnum + 1 : 1;
+            $maxId = (int)$row['id'];
+            self::debug('getDocNumber: max id = ' . $maxId);
+            return $maxId + 1;
         }
+        self::debug('getDocNumber: no rows, returning 1');
         return 1; 
     }
     
