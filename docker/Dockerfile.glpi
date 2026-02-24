@@ -1,0 +1,19 @@
+FROM glpi/glpi:latest
+
+# Instalacja pluginu Fields (main branch – kompatybilny z GLPI 11)
+RUN apt-get update -qq \
+    && apt-get install -y --no-install-recommends unzip default-mysql-client \
+    && curl -fSL -o /tmp/fields.zip \
+       "https://github.com/pluginsGLPI/fields/archive/refs/heads/main.zip" \
+    && unzip -q /tmp/fields.zip -d /tmp/ \
+    && mkdir -p /var/glpi/marketplace \
+    && mv /tmp/fields-main /var/glpi/marketplace/fields \
+    && rm -f /tmp/fields.zip \
+    && curl -fSL -o /usr/local/bin/composer \
+       "https://getcomposer.org/download/latest-stable/composer.phar" \
+    && chmod +x /usr/local/bin/composer \
+    && cd /var/glpi/marketplace/fields \
+    && composer install --no-dev --no-interaction --prefer-dist \
+    && rm -f /usr/local/bin/composer \
+    && apt-get purge -y unzip && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
