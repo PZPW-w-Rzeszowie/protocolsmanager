@@ -117,12 +117,31 @@ class PluginProtocolsmanagerGenerate extends CommonDBTM {
                     ' name=' . ($item->fields['name'] ?? '')
                 );
 
+                // Resolve manufacturer name from ID
+                $man_name = '';
+                if (!empty($item->fields['manufacturers_id'])) {
+                    $man_name = Dropdown::getDropdownName('glpi_manufacturers', $item->fields['manufacturers_id']);
+                    if ($man_name === '&nbsp;') $man_name = '';
+                }
+
+                // Resolve model name from ID
+                $mod_name = '';
+                $modeltypes = ['computer', 'phone', 'monitor', 'networkequipment', 'printer', 'peripheral'];
+                foreach ($modeltypes as $prefix) {
+                    $field = $prefix . 'models_id';
+                    if (!empty($item->fields[$field])) {
+                        $mod_name = Dropdown::getDropdownName('glpi_' . $prefix . 'models', $item->fields[$field]);
+                        if ($mod_name === '&nbsp;') $mod_name = '';
+                        break;
+                    }
+                }
+
                 $result[] = [
                     'id'           => $item->fields['id'],
                     'name'         => $item->fields['name'] ?? '',
                     'itemtype'     => $itemtype,
-                    'manufacturer' => $item->fields['manufacturer'] ?? '',
-                    'model'        => $item->fields['model'] ?? '',
+                    'manufacturer' => $man_name,
+                    'model'        => $mod_name,
                     'serial'       => $item->fields['serial'] ?? '',
                     'otherserial'  => $item->fields['otherserial'] ?? '',
                 ];
@@ -397,6 +416,15 @@ class PluginProtocolsmanagerGenerate extends CommonDBTM {
         $header .= "<th class='center'>".__('Comments')."</th></tr>";
         echo $header;
 
+        // Compute owner and author for hidden fields
+        $Owner = new User();
+        $Owner->getFromDB($id);
+        $owner = $Owner->getFriendlyName();
+
+        $Author = new User();
+        $Author->getFromDB(Session::getLoginUserID());
+        $author = $Author->getFriendlyName();
+
         // --- WSTRZYKIWANIE ELEMENTÓW Z ODPOWIEDZIALNY MATERIALNIE ---
         $items = self::getItemsAssignedToUser($item);
 
@@ -442,6 +470,8 @@ class PluginProtocolsmanagerGenerate extends CommonDBTM {
             echo "<input type='hidden' name='serial[]' value='" . htmlescape($c['serial'] ?? '') . "'>";
             echo "<input type='hidden' name='otherserial[]' value='" . htmlescape($c['otherserial'] ?? '') . "'>";
             echo "<input type='hidden' name='item_name[]' value='" . htmlescape($c['name']) . "'>";
+            echo "<input type='hidden' name='owner' value='" . htmlescape($owner) . "'>";
+            echo "<input type='hidden' name='author' value='" . htmlescape($author) . "'>";
             echo "<input type='hidden' name='user_id' value='" . htmlescape($id) . "'>";
 
             echo "</tr>";
@@ -832,6 +862,8 @@ class PluginProtocolsmanagerGenerate extends CommonDBTM {
                 $email_template = $row["email_template"];
                 $serial_mode = $row["serial_mode"];
                 $author_state = $row["author_state"];
+                $author_name = !empty($row["author_name"]) ? $row["author_name"] : '';
+                $breakword = !empty($row["breakword"]) ? $row["breakword"] : 0;
                 
                 // Reemplazos comunes
                 $replacements = [

@@ -24,6 +24,7 @@
         #items th, #items td {
             border: 0.5px solid black;
             padding: 2px;
+            text-align: center;
         }
         <?php if ($breakword == 1): ?>
         #items td {
